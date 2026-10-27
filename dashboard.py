@@ -64,6 +64,70 @@ signal_trades = [t for t in trades if t["status"] == "SELL_SIGNAL"]
 active_trades = [t for t in trades if t["status"] == "ACTIVE"]
 closed_trades = [t for t in trades if t["status"] == "CLOSED"]
 
+# === PERFORMANCE ANALYTICS ===
+st.subheader("📊 Performance Analytics (Closed Trades)")
+
+if closed_trades:
+    # Calculate metrics
+    total_trades = len(closed_trades)
+    wins = [t for t in closed_trades if t['pnl_pct'] > 0]
+    
+    win_rate = (len(wins) / total_trades) * 100
+    avg_pnl = sum(t['pnl_pct'] for t in closed_trades) / total_trades
+    total_pnl = sum(t['pnl_pct'] for t in closed_trades)
+    largest_win = max(t['pnl_pct'] for t in closed_trades)
+    largest_loss = min(t['pnl_pct'] for t in closed_trades)
+    
+    # Display Key Metrics
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Total Trades", total_trades)
+    col2.metric("Win Rate", f"{win_rate:.1f}%", help="Percentage of profitable trades")
+    col3.metric("Avg P&L", f"{avg_pnl:.2f}%", delta=f"{total_pnl:.2f}% total", help="Average return per trade")
+    col4.metric("Largest Win", f"{largest_win:.2f}%")
+    col5.metric("Largest Loss", f"{largest_loss:.2f}%")
+    
+    st.markdown("---")
+    
+    # Equity Curve (Cumulative P&L)
+    st.subheader("📈 Equity Curve (Cumulative P&L)")
+    
+    # Sort closed trades by ID to show chronological progression
+    closed_sorted = sorted(closed_trades, key=lambda x: x['id'])
+    cumulative_pnl = []
+    current_sum = 0
+    
+    for t in closed_sorted:
+        current_sum += t['pnl_pct']
+        cumulative_pnl.append(current_sum)
+        
+    fig_pnl = go.Figure()
+    fig_pnl.add_trace(go.Scatter(
+        x=[f"Trade {i+1}<br><small>{t['ticker']}</small>" for i, t in enumerate(closed_sorted)],
+        y=cumulative_pnl,
+        mode='lines+markers',
+        name='Cumulative P&L',
+        line=dict(color='#00d4aa', width=3),
+        marker=dict(size=10, color='#00d4aa')
+    ))
+    
+    # Add a zero line for reference
+    fig_pnl.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+    
+    fig_pnl.update_layout(
+        xaxis_title="Trade Sequence",
+        yaxis_title="Cumulative P&L (%)",
+        template="plotly_dark",
+        height=350,
+        margin=dict(l=20, r=20, t=30, b=20)
+    )
+    
+    st.plotly_chart(fig_pnl, use_container_width=True)
+
+else:
+    st.info("📊 No closed trades yet. Analytics will appear here once you mark your first trade as 'Sold'.")
+
+st.markdown("---")
+
 # === RED SECTION: SELL SIGNALS ===
 if signal_trades:
     st.error("🚨 SELL SIGNALS - ACTION REQUIRED!")
