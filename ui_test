@@ -1,0 +1,52 @@
+"""Actually EXECUTE app.py through Streamlit's own test harness.
+
+This is stronger than a plain import: AppTest runs the whole script body, so any
+runtime error in the chart / order-ticket / positions / history sections surfaces
+here as an exception instead of only when a browser session connects.
+"""
+from streamlit.testing.v1 import AppTest
+
+at = AppTest.from_file("app.py", default_timeout=180)
+at.run()
+
+print("exceptions:", len(at.exception))
+for e in at.exception:
+    print("  !!", e.value)
+
+print("markdown blocks:", len(at.markdown))
+print("metrics rendered:", len(at.metric))
+print("buttons rendered:", len(at.button))
+print("sliders rendered:", len(at.slider))
+print("number_inputs:", len(at.number_input))
+print("dataframes:", len(at.dataframe))
+print("sidebar sliders:", [s.label for s in at.sidebar.slider])
+
+labels = [m.label for m in at.metric]
+print("metric labels:", labels[:12])
+assert "ATR(14)" in labels, labels
+assert "ATR % of price" in labels, labels
+assert any(s.label.startswith("Trail distance") for s in at.sidebar.slider), \
+    [s.label for s in at.sidebar.slider]
+assert any(s.label.startswith("Start trailing") for s in at.sidebar.slider)
+assert not at.exception, at.exception
+
+# Now drive a real BUY through the UI and confirm the position carries trail fields.
+at.button(key="load_AAPL").click().run() if any(
+    b.key == "load_AAPL" for b in at.button
+) else None
+buy = [b for b in at.button if "Buy" in (b.label or "")]
+assert buy, [b.label for b in at.button]
+buy[0].click().run()
+assert not at.exception, at.exception
+print("after buy -> exceptions:", len(at.exception))
+print("state.json written:", __import__("os").path.exists("state.json"))
+
+import json
+state = json.load(open("state.json"))
+pos = state["positions"][0]
+print("open position:", {k: pos[k] for k in
+      ("ticker", "qty", "entry_price", "stop_loss", "initial_stop_loss",
+       "peak_price", "trail_k", "trail_activation_atr", "trail_active", "trail_lock_in")})
+assert "initial_stop_loss" in pos and "peak_price" in pos and "trail_k" in pos
+assert pos["trail_k"] > 0
+print("\nAPP RAN INSIDE STREAMLIT WITHOUT ERRORS ✅")
